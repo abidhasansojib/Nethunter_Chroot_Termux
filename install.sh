@@ -95,7 +95,7 @@ function choose_rootfs_version()
 {
     echo -e "${blue}=========================================${reset}"
     echo -e "${light_cyan} Choose Kali NetHunter Rootfs version:${reset}"
-    echo -e "${green} 1) Full${reset} (Recommended, complete suite of tools)"
+    echo -e "${green} 1) Full${reset} (Complete suite of tools)"
     echo -e "${green} 2) Minimal${reset} (Lightweight command-line only)"
     echo -e "${blue}=========================================${reset}"
     read -p "Enter choice [1 or 2]: " choice
