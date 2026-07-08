@@ -1,4 +1,4 @@
-# Boot Nethunter
+# Nethunter_Chroot_Termux
 
 Boots the **Kali Chroot (Nethunter-Rooted)** environment directly inside **Termux**, giving you a fully functional rooted Kali interface with Termux’s flexibility and customizability.No need to flash Nethunter Zip Module
 > 🧩 **Rooted Android ONLY**
@@ -16,14 +16,6 @@ If you already have the chroot installed and want to update boot scripts, custom
    ```bash
    ./install.sh --update
    ```
-
-# Fix tmp directory error
-I have added fix in installation scripts but if that doesn't work usung this in kali terminal
-
-  ```bash
-   echo 'export TMPDIR=/tmp' >> ~/.zshrc
-   source ~/.zshrc
-```
 
 ## Usage
 
