@@ -110,66 +110,84 @@ function choose_rootfs_version()
 
 function download_and_extract()
 {
+    ROOTFS_FILENAME=$(basename "$ROOTFS_URL")
+    BASE_URL=$(dirname "$ROOTFS_URL")
+
     echo -e "${light_cyan}[*] Downloading Kali NetHunter rootfs...${reset}"
     echo -e "${light_cyan}URL: $ROOTFS_URL${reset}"
 
-    if [ -f "nethunter-rootfs.tar.xz" ]; then
-        echo -e "${yellow}Found existing nethunter-rootfs.tar.xz in current directory.${reset}"
+    if [ -f "$ROOTFS_FILENAME" ]; then
+        echo -e "${yellow}Found existing $ROOTFS_FILENAME in current directory.${reset}"
         read -p "Do you want to use the existing archive instead of downloading again? (y/n): " use_existing
         use_existing=$(echo "$use_existing" | tr '[:upper:]' '[:lower:]')
         if [[ "$use_existing" != "y" && "$use_existing" != "yes" ]]; then
             echo -e "${light_cyan}[*] Downloading fresh archive...${reset}"
-            rm -f nethunter-rootfs.tar.xz nethunter-rootfs.tar.xz.sha256 SHA256SUMS
-            wget -O nethunter-rootfs.tar.xz --show-progress "$ROOTFS_URL"
+            rm -f "$ROOTFS_FILENAME" SHA256SUMS
+            wget -O "$ROOTFS_FILENAME" --show-progress "$ROOTFS_URL"
         else
             echo -e "${green}[*] Using existing archive.${reset}"
         fi
     else
-        wget -O nethunter-rootfs.tar.xz --show-progress "$ROOTFS_URL"
+        wget -O "$ROOTFS_FILENAME" --show-progress "$ROOTFS_URL"
     fi
 
-    # Fixed Integrity Validation: Read the official master SHA256SUMS file
     echo -e "${light_cyan}[*] Verifying integrity via SHA256...${reset}"
-    ROOTFS_FILENAME=$(basename "$ROOTFS_URL")
-    BASE_URL=$(dirname "$ROOTFS_URL")
-
-    # Download the universal hash file
     if wget -q -O SHA256SUMS "${BASE_URL}/SHA256SUMS"; then
-        # Find our specific file's hash and format it to match our local filename
-        grep "$ROOTFS_FILENAME" SHA256SUMS | sed "s|$ROOTFS_FILENAME|nethunter-rootfs.tar.xz|g" > nethunter-rootfs.tar.xz.sha256
-        
-        # Check if grep actually found the hash (file is not empty)
-        if [ -s nethunter-rootfs.tar.xz.sha256 ]; then
-            if sha256sum -c nethunter-rootfs.tar.xz.sha256 >/dev/null 2>&1; then
+        # Check against the actual filename variant found inside the SHA256SUMS file
+        if grep "$ROOTFS_FILENAME" SHA256SUMS > /dev/null 2>&1; then
+            # Direct dynamic match if "current" matches the file structure
+            grep "$ROOTFS_FILENAME" SHA256SUMS > tracking.sha256
+        else
+            # Fallback for versioned strings (e.g., matching "rootfs-minimal-arm64.tar.xz")
+            SHORT_NAME=$(echo "$ROOTFS_FILENAME" | sed 's/kali-nethunter-//')
+            grep "$SHORT_NAME" SHA256SUMS > tracking.sha256
+        fi
+
+        if [ -s tracking.sha256 ]; then
+            # Dynamically capture whatever filename Kali mapped the hash to
+            KALI_FILE_MAPPED=$(awk '{print $2}' tracking.sha256)
+            mv "$ROOTFS_FILENAME" "$KALI_FILE_MAPPED"
+
+            if sha256sum -c tracking.sha256 >/dev/null 2>&1; then
                 echo -e "${green}✓ Integrity verification passed!${reset}"
+                # Set it back to what the extraction line expects
+                FINAL_TARGET="$KALI_FILE_MAPPED"
             else
                 echo -e "${red}❌ Integrity verification failed! Corrupted download.${reset}"
-                rm -f SHA256SUMS nethunter-rootfs.tar.xz.sha256
+                rm -f SHA256SUMS tracking.sha256 "$KALI_FILE_MAPPED"
                 exit 1
             fi
         else
-            echo -e "${yellow}⚠️ Warning: Hash for $ROOTFS_FILENAME not found in SHA256SUMS. Skipping verification.${reset}"
+            echo -e "${yellow}⚠️ Warning: Hash matching your target architecture was not found in SHA256SUMS. Skipping verification.${reset}"
+            FINAL_TARGET="$ROOTFS_FILENAME"
         fi
-        rm -f SHA256SUMS nethunter-rootfs.tar.xz.sha256
+        rm -f SHA256SUMS tracking.sha256
     else
         echo -e "${yellow}⚠️ Warning: SHA256SUMS file could not be downloaded. Skipping verification.${reset}"
-        rm -f SHA256SUMS # Clean up failed empty wget file
+        rm -f SHA256SUMS
+        FINAL_TARGET="$ROOTFS_FILENAME"
     fi
 
     echo -e "${light_cyan}[*] Creating target directory /data/local/nhsystem...${reset}"
     su -c "mkdir -p /data/local/nhsystem"
 
     echo -e "${light_cyan}[*] Extracting Kali rootfs (this may take a few minutes)...${reset}"
-    su -c "PATH=$PATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH tar -xJf nethunter-rootfs.tar.xz -C /data/local/nhsystem"
+    su -c "PATH=$PATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH tar -xJf $FINAL_TARGET -C /data/local/nhsystem"
     if [ $? -ne 0 ]; then
         echo -e "${red}❌ Error: Failed to extract rootfs.${reset}"
+        # Clean up files on error
+        rm -f "$FINAL_TARGET"
         exit 1
     fi
     echo -e "${green}✓ Extraction completed successfully.${reset}"
 
     echo -e "${light_cyan}[*] Creating kalifs symlink...${reset}"
     su -c "ln -sf /data/local/nhsystem/kali-${ARCH} /data/local/nhsystem/kalifs"
+    
+    # Track the variable to clean up the correctly named archive at the end
+    ROOTFS_CLEANUP_TARGET="$FINAL_TARGET"
 }
+
 
 function setup_boot_scripts()
 {
@@ -486,7 +504,7 @@ function setup_permissions_and_audio()
 
     echo -e "${light_cyan}[*] Installing nethunter-utils inside chroot for audio support...${reset}"
     su -c "env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin TERM=xterm /system/bin/chroot /data/local/nhsystem/kali-${ARCH} apt-get update"
-    su -c "env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin TERM=xterm DEBIAN_FRONTEND=noninteractive /system/bin/chroot /data/local/nhsystem/kali-${ARCH} apt-get install -y nethunter-utils"
+    su -c "env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin TERM=xterm DEBIAN_FRONTEND=noninteractive /system/bin/chroot /data/local/nhsystem/kali-${ARCH} apt-get install -y zsh-autosuggestions zsh-syntax-highlighting"
     su -c "env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin TERM=xterm /system/bin/chroot /data/local/nhsystem/kali-${ARCH} chmod +x /usr/bin/audio 2>/dev/null" || true
     echo -e "${green}✓ Permissions and audio configuration complete.${reset}"
 }
@@ -564,23 +582,24 @@ function setup_kali_boot() {
     fi
 }
 
-
 function clean_temp()
 {
     echo -e "${light_cyan}[*] Cleaning up temporary files...${reset}"
     
-    if [ -f "nethunter-rootfs.tar.xz" ]; then
+    # [FIXED] Uses variable tracker instead of hardcoded archive patterns
+    if [ -n "$ROOTFS_CLEANUP_TARGET" ] && [ -f "$ROOTFS_CLEANUP_TARGET" ]; then
         read -p "Do you want to delete the downloaded rootfs archive to free up space? (y/n): " clean_choice
         clean_choice=$(echo "$clean_choice" | tr '[:upper:]' '[:lower:]')
         if [[ "$clean_choice" == "y" || "$clean_choice" == "yes" ]]; then
-            rm -f nethunter-rootfs.tar.xz nethunter-rootfs.tar.xz.sha256 SHA256SUMS
+            rm -f "$ROOTFS_CLEANUP_TARGET"
             echo -e "${green}✓ Rootfs archives cleared.${reset}"
         else
             echo -e "${yellow}ℹ️ Rootfs archive kept.${reset}"
         fi
-    else
-        rm -f nethunter-rootfs.tar.xz.sha256 SHA256SUMS
     fi
+
+    # [FIXED] Clean up logic no longer contains loose broken dangling syntax blocks
+    rm -f SHA256SUMS tracking.sha256 nethunter-rootfs.tar.xz.sha256 2>/dev/null
 
     if [ -f ~/.wget-hsts ]; then
         rm -f ~/.wget-hsts
@@ -595,6 +614,7 @@ function clean_temp()
     echo " "
     read -p "Press [Enter] to finish..."
 }
+
 
 ############ Main Execution #############
 
