@@ -6,15 +6,16 @@ Boots the **Kali Chroot (Nethunter-Rooted)** environment directly inside **Termu
 # Installation 
 
    ```bash
-   pkg install git && git clone https://github.com/abidhasansojib/Nethunter_Chroot_Termux.git && cd Nethunter_Chroot_Termux && chmod +x install.sh && ./install.sh
+   pkg install git -y && git clone https://github.com/abidhasansojib/Nethunter_Chroot_Termux.git && cd Nethunter_Chroot_Termux && chmod +x install.sh && ./install.sh
    ```
 
 ## Updating Configurations & Patches
 
-If you already have the chroot installed and want to update boot scripts, custom files, or apply compatibility patches (like fixing the multi-line wrap/arrow-key issues) without deleting or losing any data in your chroot, run:
+If you already have the chroot installed and want to update boot scripts, custom files, or apply compatibility patches without deleting or losing any data in chroot , run this in termux:
+
 
    ```bash
-   ./install.sh --update
+   pkg install git -y && git clone https://github.com/abidhasansojib/Nethunter_Chroot_Termux.git && cd Nethunter_Chroot_Termux && chmod +x install.sh && ./install.sh --update
    ```
 
 ## Usage
