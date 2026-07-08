@@ -419,7 +419,7 @@ function setup_nh_files()
         su -c "mkdir -p '$ROOT_DIR/scripts'"
         for f in "$SCRIPTS_SRC"/*; do
             if [ "$(basename "$f")" != "kex" ]; then
-                su -c "cp '$f' '$ROOT_DIR/scripts/' && chmod +x '$ROOT_DIR/$(basename \"$f\")'"
+                su -c "cp '$f' '$ROOT_DIR/scripts/' && chmod +x '$ROOT_DIR/\$(basename \"$f\")'"
             fi
         done
         echo -e "${green}✓ All remaining scripts moved to root and made executable.${reset}"
