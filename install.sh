@@ -399,6 +399,8 @@ EOF
 
 function setup_nh_files()
 {
+    # Ensure ARCH is available (assumes it is set globally, or fallback to native)
+    local ARCH="${ARCH:-arm64}" 
     local BIN_DIR="/data/local/nhsystem/kali-${ARCH}/bin"
     local ROOT_DIR="/data/local/nhsystem/kali-${ARCH}/root"
     local SCRIPTS_SRC="scripts"
@@ -408,23 +410,42 @@ function setup_nh_files()
         return 0
     fi
 
+    # 1. Handle 'kex' specifically
     if [ -f "$SCRIPTS_SRC/kex" ]; then
         echo -e "${light_cyan}[*] Copying 'kex' to $BIN_DIR...${reset}"
         su -c "mkdir -p '$BIN_DIR' && cp '$SCRIPTS_SRC/kex' '$BIN_DIR/' && chmod +x '$BIN_DIR/kex'"
         echo -e "${green}✓ 'kex' moved and made executable.${reset}"
     fi
 
-    if [ "$(shopt -s nullglob; echo "$SCRIPTS_SRC"/*)" ]; then
-        echo -e "${light_cyan}[*] Copying remaining scripts to $ROOT_DIR...${reset}"
-        su -c "mkdir -p '$ROOT_DIR/scripts'"
-        for f in "$SCRIPTS_SRC"/*; do
-            if [ "$(basename "$f")" != "kex" ]; then
-                su -c "cp '$f' '$ROOT_DIR/scripts/' && chmod +x '$ROOT_DIR/scripts/*.sh'"
+    # 2. Track if any other scripts actually get copied
+    local copied_any=false
+
+    # Loop through files securely using nullglob locally
+    local f
+    shopt -s nullglob
+    for f in "$SCRIPTS_SRC"/*; do
+        local fname=$(basename "$f")
+        
+        # Skip kex since it was handled above
+        if [ "$fname" != "kex" ]; then
+            if [ "$copied_any" = false ]; then
+                echo -e "${light_cyan}[*] Copying remaining scripts to $ROOT_DIR...${reset}"
+                su -c "mkdir -p '$ROOT_DIR/scripts'"
+                copied_any=true
             fi
-        done
+            
+            # Copy and chmod ONLY the specific file being processed
+            su -c "cp '$f' '$ROOT_DIR/scripts/$fname' && chmod +x '$ROOT_DIR/scripts/$fname'"
+        fi
+    done
+    shopt -u nullglob # restore default behavior
+
+    # Only show success message if files were actually moved
+    if [ "$copied_any" = true ]; then
         echo -e "${green}✓ All remaining scripts moved to root and made executable.${reset}"
     fi
 }
+
 
 function apply_chroot_compatibility_fixes()
 {
