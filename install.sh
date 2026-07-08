@@ -399,8 +399,6 @@ EOF
 
 function setup_nh_files()
 {
-    # Ensure ARCH is available (assumes it is set globally, or fallback to native)
-    local ARCH="${ARCH:-arm64}" 
     local BIN_DIR="/data/local/nhsystem/kali-${ARCH}/bin"
     local ROOT_DIR="/data/local/nhsystem/kali-${ARCH}/root"
     local SCRIPTS_SRC="scripts"
@@ -410,9 +408,10 @@ function setup_nh_files()
         return 0
     fi
 
-    # 1. Handle 'kex' specifically
+    # 1. Handle 'kex' specifically (Only make executable if it matches your rule, or keep it mandatory)
     if [ -f "$SCRIPTS_SRC/kex" ]; then
         echo -e "${light_cyan}[*] Copying 'kex' to $BIN_DIR...${reset}"
+        # If kex doesn't have a .sh extension but absolutely needs to be executable, keep chmod +x here
         su -c "mkdir -p '$BIN_DIR' && cp '$SCRIPTS_SRC/kex' '$BIN_DIR/' && chmod +x '$BIN_DIR/kex'"
         echo -e "${green}✓ 'kex' moved and made executable.${reset}"
     fi
@@ -420,7 +419,7 @@ function setup_nh_files()
     # 2. Track if any other scripts actually get copied
     local copied_any=false
 
-    # Loop through files securely using nullglob locally
+    # Loop through files securely
     local f
     shopt -s nullglob
     for f in "$SCRIPTS_SRC"/*; do
@@ -434,15 +433,19 @@ function setup_nh_files()
                 copied_any=true
             fi
             
-            # Copy and chmod ONLY the specific file being processed
-            su -c "cp '$f' '$ROOT_DIR/scripts/$fname' && chmod +x '$ROOT_DIR/scripts/$fname'"
+            # Copy the file to the destination first
+            su -c "cp '$f' '$ROOT_DIR/scripts/$fname'"
+
+            # CRITICAL FIX: Only apply chmod +x if the filename ends with .sh
+            if [[ "$fname" == *.sh ]]; then
+                su -c "chmod +x '$ROOT_DIR/scripts/$fname'"
+            fi
         fi
     done
     shopt -u nullglob # restore default behavior
 
-    # Only show success message if files were actually moved
     if [ "$copied_any" = true ]; then
-        echo -e "${green}✓ All remaining scripts moved to root and made executable.${reset}"
+        echo -e "${green}✓ All remaining scripts moved to root (.sh files made executable).${reset}"
     fi
 }
 
