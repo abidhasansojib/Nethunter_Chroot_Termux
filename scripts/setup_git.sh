@@ -33,7 +33,7 @@ gh auth login
 
 # 5. Ask user for Git identity setup
 echo -e "\n[*] Configuring Git Identity..."
-read -p "Enter your GitHub Username: " github_user
+read -p "Enter your Name in GitHub: " github_user
 read -p "Enter your GitHub Email: " github_email
 
 git config --global user.name "$github_user"
